@@ -5,6 +5,16 @@
 **Status**: Draft
 **Input**: User description: "URL List 관리 API - 리스트 생성/조회/수정/삭제, URL 추가/관리, Slug 공유, Draft/Published 상태 관리"
 
+## Clarifications
+
+### Session 2025-11-07
+
+- Q: What happens when user tries to create a list with empty/missing title? → A: Reject with validation error (title is required/mandatory)
+- Q: What happens when user sets slug on a draft list (allowed or requires published status)? → A: Allow: Draft lists can have slugs assigned before publishing
+- Q: How should URLs within a list be ordered when retrieved? → A: Creation order (first added URL appears first)
+- Q: What happens when user tries to publish a list without setting a slug first? → A: Allow: Published lists can exist without slugs (not accessible via slug endpoint)
+- Q: What happens when user tries to delete a non-existent list? → A: Return 404 Not Found (resource doesn't exist)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Create and Manage URL Lists (Priority: P1)
@@ -58,22 +68,23 @@ A user wants to share their curated URL collection publicly. They assign a uniqu
 3. **Given** a published list exists, **When** user changes status back to "draft", **Then** public slug access returns "not found" or "not published" error
 4. **Given** two users try to use slug "popular", **When** second user attempts to save, **Then** system rejects with "slug already exists" error
 5. **Given** a published list with slug "old-slug", **When** user changes slug to "new-slug", **Then** old slug becomes invalid and new slug works
+6. **Given** a draft list without a slug, **When** user changes status to "published", **Then** the list is published but not accessible via slug endpoint (only via ID)
 
 ---
 
 ### Edge Cases
 
-- What happens when user tries to create a list with empty/missing title?
+- **Empty/missing title**: System rejects the request with a validation error indicating title is required
 - What happens when user tries to add a URL to a non-existent list ID?
 - What happens when user provides invalid URL format (not http/https)?
 - What happens when URL exceeds 2048 characters?
 - What happens when slug contains uppercase letters or special characters?
 - What happens when slug is shorter than 3 characters or longer than 50 characters?
 - What happens when title exceeds 200 characters?
-- What happens when user tries to delete a non-existent list?
+- **Deleting non-existent resource**: System returns 404 Not Found error (applies to both lists and URLs)
 - What happens when user tries to access a draft list via public slug?
-- What happens when user sets slug on a draft list (allowed or requires published status)?
-- What happens when user tries to publish a list without setting a slug first?
+- **Setting slug on draft list**: Allowed - draft lists can have slugs assigned before publishing, but public access remains blocked until published
+- **Publishing without slug**: Allowed - lists can be published without a slug, but they won't be accessible via the public slug endpoint (only via ID)
 - What happens when database is restarted - do lists and URLs persist?
 
 ## Requirements *(mandatory)*
@@ -98,47 +109,51 @@ A user wants to share their curated URL collection publicly. They assign a uniqu
 - **FR-011**: System MUST allow optionally providing a title when adding a URL
 - **FR-012**: System MUST assign a unique identifier to each URL entry
 - **FR-013**: System MUST allow retrieving all URLs belonging to a specific list
-- **FR-014**: System MUST allow deleting a specific URL from a list by URL identifier
-- **FR-015**: System MUST allow duplicate URLs within the same list (each with unique ID)
+- **FR-014**: System MUST return URLs in creation order (first added URL appears first)
+- **FR-015**: System MUST allow deleting a specific URL from a list by URL identifier
+- **FR-016**: System MUST allow duplicate URLs within the same list (each with unique ID)
 
 **Public Sharing**:
 
-- **FR-016**: System MUST allow retrieving a published list by its slug
-- **FR-017**: System MUST prevent slug-based access to draft lists
-- **FR-018**: System MUST enforce slug uniqueness across all lists
+- **FR-017**: System MUST allow retrieving a published list by its slug (if slug is set)
+- **FR-018**: System MUST prevent slug-based access to draft lists
+- **FR-019**: System MUST enforce slug uniqueness across all lists
+- **FR-020**: System MUST allow setting slugs on draft lists (slugs can be assigned before publishing)
+- **FR-021**: System MUST allow publishing lists without a slug (such lists are not accessible via slug endpoint)
 
 **Status Management**:
 
-- **FR-019**: System MUST set new lists to "draft" status by default
-- **FR-020**: System MUST support exactly two status values: "draft" and "published"
-- **FR-021**: System MUST allow transitioning between draft and published states
+- **FR-022**: System MUST set new lists to "draft" status by default
+- **FR-023**: System MUST support exactly two status values: "draft" and "published"
+- **FR-024**: System MUST allow transitioning between draft and published states
 
 **Data Persistence**:
 
-- **FR-022**: System MUST persist all lists and URLs to permanent storage
-- **FR-023**: System MUST retain all data after application restart
-- **FR-024**: System MUST maintain data integrity across create/update/delete operations
+- **FR-025**: System MUST persist all lists and URLs to permanent storage
+- **FR-026**: System MUST retain all data after application restart
+- **FR-027**: System MUST maintain data integrity across create/update/delete operations
 
 **Validation & Error Handling**:
 
-- **FR-025**: System MUST validate that URLs start with "http://" or "https://"
-- **FR-026**: System MUST reject URLs longer than 2048 characters
-- **FR-027**: System MUST validate that slugs contain only lowercase letters, numbers, and hyphens
-- **FR-028**: System MUST reject slugs shorter than 3 characters or longer than 50 characters
-- **FR-029**: System MUST reject duplicate slugs across all lists
-- **FR-030**: System MUST reject titles longer than 200 characters
-- **FR-031**: System MUST return appropriate error messages for all validation failures
-- **FR-032**: System MUST return appropriate error codes for not-found resources
-- **FR-033**: System MUST handle malformed requests gracefully with clear error messages
+- **FR-028**: System MUST validate that URLs start with "http://" or "https://"
+- **FR-029**: System MUST reject URLs longer than 2048 characters
+- **FR-030**: System MUST validate that slugs contain only lowercase letters, numbers, and hyphens
+- **FR-031**: System MUST reject slugs shorter than 3 characters or longer than 50 characters
+- **FR-032**: System MUST reject duplicate slugs across all lists
+- **FR-033**: System MUST reject titles longer than 200 characters
+- **FR-034**: System MUST reject empty or missing titles when creating or updating lists
+- **FR-035**: System MUST return appropriate error messages for all validation failures
+- **FR-036**: System MUST return 404 Not Found when attempting to retrieve, update, or delete non-existent resources
+- **FR-037**: System MUST handle malformed requests gracefully with clear error messages
 
 **API Documentation**:
 
-- **FR-034**: System MUST provide interactive API documentation for all endpoints
-- **FR-035**: System MUST allow testing all endpoints directly from documentation interface
+- **FR-038**: System MUST provide interactive API documentation for all endpoints
+- **FR-039**: System MUST allow testing all endpoints directly from documentation interface
 
 ### Key Entities
 
-- **URLList**: Represents a collection of URLs. Contains unique identifier, title (up to 200 characters), optional slug (3-50 characters, lowercase alphanumeric and hyphens), status (draft or published), creation timestamp, and last updated timestamp. Relationship: one list contains zero or more URLItems.
+- **URLList**: Represents a collection of URLs. Contains unique identifier, required title (1-200 characters, cannot be empty), optional slug (3-50 characters, lowercase alphanumeric and hyphens), status (draft or published), creation timestamp, and last updated timestamp. Relationship: one list contains zero or more URLItems.
 
 - **URLItem**: Represents a single URL entry within a list. Contains unique identifier, the URL string (http/https, max 2048 characters), optional title (up to 200 characters), creation timestamp, and reference to parent list. Relationship: many URLItems belong to one URLList.
 
@@ -165,7 +180,7 @@ A user wants to share their curated URL collection publicly. They assign a uniqu
 - **Authentication**: No user authentication means all lists are accessible by ID to anyone (acceptable tradeoff stated in constraints)
 - **Data Retention**: Indefinite retention is acceptable (no automatic cleanup or archival needed)
 - **URL Validation**: Basic protocol and length validation is sufficient (no DNS lookup, reachability check, or content verification needed)
-- **Ordering**: Lists and URLs returned in creation order or database natural order (no specific sorting requirements)
+- **Ordering**: URLs within a list are returned in creation order (first added appears first); lists are returned in creation order
 - **Metadata**: No automatic URL metadata extraction (title, description, favicon) as explicitly excluded in constraints
 - **Search**: No search or filtering capabilities needed as explicitly excluded in constraints
 - **Pagination**: Full retrieval of all lists/URLs is acceptable without pagination as explicitly excluded in constraints
