@@ -3,7 +3,8 @@
     "allow": [
       "Bash(git fetch:*)",
       "Bash(pwsh -File:*)",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(git rev-parse:*)"
     ],
     "deny": [],
     "ask": []
