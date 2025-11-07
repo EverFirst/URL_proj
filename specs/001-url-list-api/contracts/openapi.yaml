@@ -1,0 +1,540 @@
+openapi: 3.1.0
+info:
+  title: URL List Management API
+  description: |
+    RESTful API for managing URL collections with public sharing capabilities.
+
+    Features:
+    - Create, read, update, and delete URL lists
+    - Add and manage URLs within lists
+    - Publish lists with unique slugs for public access
+    - Draft/published state management
+
+    Technical Stack:
+    - Python 3.11+
+    - FastAPI 0.104+
+    - SQLAlchemy 2.0+
+    - Pydantic v2
+  version: 1.0.0
+  contact:
+    name: API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.example.com
+    description: Production server (future)
+
+tags:
+  - name: Lists
+    description: URL list management operations (CRUD)
+  - name: URLs
+    description: URL item management within lists
+  - name: Public
+    description: Public slug-based access to published lists
+
+paths:
+  /lists:
+    get:
+      tags: [Lists]
+      summary: Get all lists
+      description: |
+        Retrieves all URL lists in the system.
+        Returns lists in creation order (oldest first).
+        No pagination - returns complete collection.
+      operationId: getAllLists
+      responses:
+        '200':
+          description: List of all URL lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ListResponse'
+              example:
+                - id: 1
+                  title: "Tech Resources"
+                  slug: "tech-resources"
+                  status: "published"
+                  created_at: "2025-11-07T10:00:00Z"
+                  updated_at: "2025-11-07T11:00:00Z"
+                  urls: []
+                - id: 2
+                  title: "Reading List"
+                  slug: null
+                  status: "draft"
+                  created_at: "2025-11-07T12:00:00Z"
+                  updated_at: "2025-11-07T12:00:00Z"
+                  urls: []
+
+    post:
+      tags: [Lists]
+      summary: Create a new list
+      description: |
+        Creates a new URL list with the specified title.
+        List is created in 'draft' status by default.
+        Slug can be set later via PATCH endpoint.
+      operationId: createList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListCreateRequest'
+            example:
+              title: "My Favorite Tools"
+      responses:
+        '201':
+          description: List created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /lists/{list_id}:
+    get:
+      tags: [Lists]
+      summary: Get a specific list by ID
+      description: |
+        Retrieves a single URL list by its unique identifier.
+        Includes all associated URLs in creation order.
+      operationId: getListById
+      parameters:
+        - $ref: '#/components/parameters/ListId'
+      responses:
+        '200':
+          description: List details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Lists]
+      summary: Update a list
+      description: |
+        Updates one or more fields of a URL list.
+        All fields are optional - only provided fields are updated.
+        Slug uniqueness is enforced (409 if slug already exists).
+      operationId: updateList
+      parameters:
+        - $ref: '#/components/parameters/ListId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListUpdateRequest'
+            examples:
+              updateTitle:
+                summary: Update only title
+                value:
+                  title: "Updated Title"
+              setSlug:
+                summary: Set slug for publishing
+                value:
+                  slug: "my-tools"
+              publish:
+                summary: Publish without slug
+                value:
+                  status: "published"
+              publishWithSlug:
+                summary: Publish with slug
+                value:
+                  slug: "tech-tools"
+                  status: "published"
+      responses:
+        '200':
+          description: List updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+    delete:
+      tags: [Lists]
+      summary: Delete a list
+      description: |
+        Deletes a URL list and all associated URLs (cascade delete).
+        Returns 404 if list does not exist.
+      operationId: deleteList
+      parameters:
+        - $ref: '#/components/parameters/ListId'
+      responses:
+        '204':
+          description: List deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /lists/{list_id}/urls:
+    get:
+      tags: [URLs]
+      summary: Get all URLs in a list
+      description: |
+        Retrieves all URLs belonging to a specific list.
+        URLs are returned in creation order (first added appears first).
+      operationId: getUrlsInList
+      parameters:
+        - $ref: '#/components/parameters/ListId'
+      responses:
+        '200':
+          description: List of URLs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/URLItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [URLs]
+      summary: Add a URL to a list
+      description: |
+        Adds a new URL to the specified list.
+        Duplicate URLs are allowed (each gets unique ID).
+        Title is optional.
+      operationId: addUrlToList
+      parameters:
+        - $ref: '#/components/parameters/ListId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/URLCreateRequest'
+            examples:
+              withTitle:
+                summary: URL with title
+                value:
+                  url: "https://example.com"
+                  title: "Example Site"
+              withoutTitle:
+                summary: URL without title
+                value:
+                  url: "https://github.com"
+      responses:
+        '201':
+          description: URL added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/URLItemResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          description: List not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                detail: "List with ID 999 not found"
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /lists/{list_id}/urls/{url_id}:
+    delete:
+      tags: [URLs]
+      summary: Delete a URL from a list
+      description: |
+        Removes a specific URL from a list.
+        Returns 404 if URL does not exist.
+      operationId: deleteUrlFromList
+      parameters:
+        - $ref: '#/components/parameters/ListId'
+        - $ref: '#/components/parameters/UrlId'
+      responses:
+        '204':
+          description: URL deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /public/{slug}:
+    get:
+      tags: [Public]
+      summary: Get published list by slug
+      description: |
+        Retrieves a published list via its unique slug.
+        Only accessible if list status is 'published' and slug is set.
+        Draft lists with slugs return 404.
+        Returns list with all URLs in creation order.
+      operationId: getPublicListBySlug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]{3,50}$'
+            minLength: 3
+            maxLength: 50
+          description: Unique slug identifier (3-50 chars, lowercase alphanumeric and hyphens)
+          example: "tech-resources"
+      responses:
+        '200':
+          description: Published list details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListResponse'
+        '404':
+          description: List not found or not published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: Slug does not exist
+                  value:
+                    detail: "List with slug 'nonexistent' not found"
+                notPublished:
+                  summary: List is draft
+                  value:
+                    detail: "List with slug 'draft-list' is not published"
+
+components:
+  parameters:
+    ListId:
+      name: list_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Unique list identifier
+      example: 123
+
+    UrlId:
+      name: url_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Unique URL item identifier
+      example: 789
+
+  schemas:
+    ListCreateRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: List title (required, 1-200 characters)
+          example: "My Favorite Tools"
+      additionalProperties: false
+
+    ListUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Updated list title (1-200 characters)
+          example: "Updated Title"
+        slug:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+          minLength: 3
+          maxLength: 50
+          description: Unique slug for public access (3-50 chars, lowercase alphanumeric and hyphens)
+          example: "my-tools"
+        status:
+          type: string
+          enum: [draft, published]
+          description: Publication status
+          example: "published"
+      minProperties: 1
+      additionalProperties: false
+
+    ListResponse:
+      type: object
+      required:
+        - id
+        - title
+        - slug
+        - status
+        - created_at
+        - updated_at
+        - urls
+      properties:
+        id:
+          type: integer
+          description: Unique list identifier
+          example: 123
+        title:
+          type: string
+          description: List title
+          example: "Tech Resources"
+        slug:
+          type: string
+          nullable: true
+          description: Unique slug for public access (null if not set)
+          example: "tech-resources"
+        status:
+          type: string
+          enum: [draft, published]
+          description: Publication status
+          example: "published"
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp (ISO 8601)
+          example: "2025-11-07T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp (ISO 8601)
+          example: "2025-11-07T11:30:00Z"
+        urls:
+          type: array
+          description: List of URLs (in creation order)
+          items:
+            $ref: '#/components/schemas/URLItemResponse'
+      additionalProperties: false
+
+    URLCreateRequest:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          maxLength: 2048
+          pattern: '^https?://'
+          description: URL must start with http:// or https:// (max 2048 characters)
+          example: "https://example.com"
+        title:
+          type: string
+          maxLength: 200
+          nullable: true
+          description: Optional descriptive title (max 200 characters)
+          example: "Example Site"
+      additionalProperties: false
+
+    URLItemResponse:
+      type: object
+      required:
+        - id
+        - url
+        - title
+        - created_at
+      properties:
+        id:
+          type: integer
+          description: Unique URL item identifier
+          example: 789
+        url:
+          type: string
+          description: The URL
+          example: "https://example.com"
+        title:
+          type: string
+          nullable: true
+          description: Optional title (null if not provided)
+          example: "Example Site"
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp (ISO 8601)
+          example: "2025-11-07T12:00:00Z"
+      additionalProperties: false
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+          example: "Resource not found"
+      additionalProperties: false
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            detail: "List with ID 999 not found"
+
+    ValidationError:
+      description: Validation error (business rule violation)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            emptyTitle:
+              summary: Empty title
+              value:
+                detail: "Title must be 1-200 characters"
+            duplicateSlug:
+              summary: Slug already exists
+              value:
+                detail: "Slug 'my-tools' already exists"
+
+    UnprocessableEntity:
+      description: Validation error (invalid format)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    loc:
+                      type: array
+                      items:
+                        oneOf:
+                          - type: string
+                          - type: integer
+                    msg:
+                      type: string
+                    type:
+                      type: string
+          example:
+            detail:
+              - loc: ["body", "slug"]
+                msg: "String should match pattern '^[a-z0-9-]+$'"
+                type: "string_pattern_mismatch"
+
+    Conflict:
+      description: Resource conflict (duplicate unique field)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            detail: "Slug 'tech-tools' already exists"
